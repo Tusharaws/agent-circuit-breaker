@@ -10,7 +10,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
-from schemas.halt_signal import HaltReason, HaltSignal
+import schemas.halt_signal as halt_signal_module
+from schemas.halt_signal import HaltSignal, load_allowed_reasons
 
 VALID_PAYLOAD = {
     "trace_id": "trace-abc123",
@@ -32,7 +33,7 @@ def test_valid_halt_signal_parses():
     signal = HaltSignal.model_validate(VALID_PAYLOAD)
 
     assert signal.trace_id == "trace-abc123"
-    assert signal.reason == HaltReason.REPEATED_TOOL_CALLS
+    assert signal.reason == "repeated_tool_calls"
     assert signal.confidence == pytest.approx(0.92)
     assert signal.triggering_window == ["evt-101", "evt-102", "evt-103"]
     assert signal.timestamp == datetime(2026, 9, 18, 12, 34, 56, tzinfo=timezone.utc)
@@ -51,9 +52,9 @@ def test_dumped_signal_matches_fields_control_api_expects():
     assert set(dumped.keys()) == EXPECTED_FIELDS
 
 
-@pytest.mark.parametrize("reason", list(HaltReason))
+@pytest.mark.parametrize("reason", load_allowed_reasons())
 def test_each_defined_reason_is_accepted(reason):
-    payload = {**VALID_PAYLOAD, "reason": reason.value}
+    payload = {**VALID_PAYLOAD, "reason": reason}
     signal = HaltSignal.model_validate(payload)
     assert signal.reason == reason
 
@@ -136,6 +137,39 @@ def test_reason_is_case_sensitive():
 @pytest.mark.parametrize("bad_reason", [None, 1, ["repeated_tool_calls"]])
 def test_reason_wrong_type_is_rejected(bad_reason):
     payload = {**VALID_PAYLOAD, "reason": bad_reason}
+    with pytest.raises(ValidationError):
+        HaltSignal.model_validate(payload)
+
+
+def test_reason_accepts_entry_newly_added_to_config(tmp_path, monkeypatch):
+    """A reason not in the shipped config becomes valid once it's added to the
+    config file the model reads from — no code change required."""
+    config_file = tmp_path / "halt_reasons.md"
+    config_file.write_text("- repeated_tool_calls\n- budget_exceeded\n")
+    monkeypatch.setattr(halt_signal_module, "_HALT_REASONS_FILE", config_file)
+
+    payload = {**VALID_PAYLOAD, "reason": "budget_exceeded"}
+    signal = HaltSignal.model_validate(payload)
+    assert signal.reason == "budget_exceeded"
+
+
+def test_reason_rejects_entry_removed_from_config(tmp_path, monkeypatch):
+    """A previously-valid reason stops validating once it's removed from the config."""
+    config_file = tmp_path / "halt_reasons.md"
+    config_file.write_text("- runaway_loop\n")
+    monkeypatch.setattr(halt_signal_module, "_HALT_REASONS_FILE", config_file)
+
+    payload = {**VALID_PAYLOAD, "reason": "repeated_tool_calls"}
+    with pytest.raises(ValidationError):
+        HaltSignal.model_validate(payload)
+
+
+def test_reason_rejects_everything_when_config_is_empty(tmp_path, monkeypatch):
+    config_file = tmp_path / "halt_reasons.md"
+    config_file.write_text("# Halt Reasons\n\n(none defined yet)\n")
+    monkeypatch.setattr(halt_signal_module, "_HALT_REASONS_FILE", config_file)
+
+    payload = {**VALID_PAYLOAD, "reason": "repeated_tool_calls"}
     with pytest.raises(ValidationError):
         HaltSignal.model_validate(payload)
 
