@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "queue-client"
+version = "0.0.1"
+description = "Client for publishing/consuming trace events on the evaluation queue (kept separate from checkpointer state)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/queue_client"]

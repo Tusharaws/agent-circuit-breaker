@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sanitizer"
+version = "0.0.1"
+description = "Cleans and normalizes captured trace events before they are queued for evaluation."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sanitizer"]

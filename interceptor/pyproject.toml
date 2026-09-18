@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "interceptor"
+version = "0.0.1"
+description = "Per-node LangGraph instrumentation that captures state snapshots and callback events for the Agent Execution Guardian."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/interceptor"]

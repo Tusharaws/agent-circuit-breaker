@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "control-api"
+version = "0.0.1"
+description = "Circuit breaker API: halts a running LangGraph thread via interrupt() and runs the halted-thread cleanup/reaper job."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/control_api"]
