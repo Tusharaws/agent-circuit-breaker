@@ -13,6 +13,8 @@ dependencies = [
     "langchain-core>=1,<2",
     "schemas",
     "sanitizer",
+    "autogen-core>=0.7,<1",
+    "control-api",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +24,8 @@ test = [
     "queue-client",
     "fakeredis>=2,<3",
     "langchain>=1,<2",
+    "autogen-agentchat>=0.7,<1",
+    "autogen-ext>=0.7,<1",
 ]
 
 [tool.hatch.build.targets.wheel]

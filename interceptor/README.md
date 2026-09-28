@@ -199,6 +199,88 @@ format each package implements itself, so a single `trace_id` is
 grep/jq-able across all 5 services' logs. See
 `integration-tests/tests/test_tracing.py` for the real cross-package proof.
 
+## AutoGen adapter: AutoGenCaptureHandler (Phase 7)
+
+`AutoGenCaptureHandler` (`src/interceptor/autogen_hooks.py`) captures and
+halts a real `autogen-agentchat` multi-agent conversation -- the same
+capture-and-halt capability `GraphCaptureHandler`/`check_halt()` provide
+for LangGraph, extended to AutoGen's very different (message-passing, not
+graph-based) execution model.
+
+**"AutoGen" today means `autogen-agentchat` + `autogen-core`** (Microsoft's
+actor-model rewrite), confirmed by checking PyPI metadata, not assumed:
+`pyautogen` is now just a proxy package pointing at `autogen-agentchat`;
+`ag2` is a separate, unrelated fork. Same pattern as the LangChain adapter
+task finding `AgentExecutor` gone from LangChain 1.x.
+
+**Capture**: `InterventionHandler.on_publish` is AutoGen's native
+message-interception hook, registered once via
+`SingleThreadedAgentRuntime(intervention_handlers=[handler])` -- no
+exception-raise hack needed. A `GroupChatAgentResponse`'s `.response`
+carries both the agent's turn (`.chat_message`, emitted as a new
+`agent_message` event type -- an agent's conversational turn has no
+LangGraph-node equivalent, so it isn't forced into `node_enter`/`node_exit`)
+and any tool calls it made (`.inner_messages`, real `ToolCallRequestEvent`/
+`ToolCallExecutionEvent` objects, emitted as `tool_start`/`tool_end` --
+reused as-is since that concept genuinely is the same one).
+
+**Halt -- a real native primitive, not an exception-raise:** AutoGen has
+no customer-editable graph to insert a guard node into, but it does have
+`CancellationToken`. Confirmed empirically (found a real gotcha along the
+way: a custom `runtime` passed into a `Team` is *not* auto-started/stopped
+-- that's the caller's job): calling `.cancel()` on the same token passed
+to `team.run(cancellation_token=token)` -- whether from outside or, as in
+production use, from inside this same handler's `on_publish` -- cleanly
+raises `asyncio.CancelledError` back to the caller within milliseconds.
+Because there's no guard-node equivalent to check `HaltRegistry`
+separately, capture and halt are unified in one handler: every `on_publish`
+call also checks `HaltRegistry.is_halted(thread_id)` and cancels the token
+if so.
+
+`thread_id` is a constructor parameter, not auto-propagated (unlike
+LangGraph's `config["configurable"]["thread_id"]`, or `create_agent()`
+which inherits it since it's LangGraph underneath) -- one handler instance
+per running conversation, same as `agent_id` already is for
+`GraphCaptureHandler`.
+
+Usage:
+
+```python
+from autogen_core import CancellationToken, SingleThreadedAgentRuntime
+from autogen_agentchat.teams import RoundRobinGroupChat
+from control_api.guard import HaltRegistry
+from interceptor.autogen_hooks import AutoGenCaptureHandler
+
+token = CancellationToken()
+handler = AutoGenCaptureHandler(
+    dispatcher, agent_id="agent-1", thread_id="thread-1",
+    cancellation_token=token, registry=HaltRegistry(...),
+)
+runtime = SingleThreadedAgentRuntime(intervention_handlers=[handler])
+runtime.start()
+team = RoundRobinGroupChat([...], runtime=runtime)
+result = await team.run(task=..., cancellation_token=token)  # same token both places
+```
+
+`autogen-core` and `control-api` are production dependencies of
+`interceptor` as a result -- an adapter necessarily depends on what it
+adapts (same as `langgraph`/`langchain-core` already were), and the
+unified capture+halt design needs `check_halt`'s primitives directly.
+
+**A benign upstream warning, not a bug:** AutoGen's own runtime logs
+`RuntimeWarning: Intervention handler on_response returned None` during
+normal operation -- `DefaultInterventionHandler.on_response` (unmodified,
+not overridden by this handler) faithfully returns whatever it was given,
+which is legitimately `None` for certain internal RPC responses; the
+runtime's own warning can't distinguish that from a forgotten return.
+Confirmed by reading `DefaultInterventionHandler`'s own source -- happens
+to any consumer using it unchanged, nothing to fix here.
+
+Proven end-to-end with a real 2-agent conversation in
+`tests/test_autogen_hooks.py`: a complete ordered trace (agent turns +
+tool calls), and a real halt stopping a running conversation within a few
+turns via a real `HaltRegistry`.
+
 ## Test
 
 ```bash
@@ -212,3 +294,5 @@ node-hook wiring (`GraphCaptureHandler`), and the `QueueClient` adapter
 implemented and tested. Remaining Phase 1 work: richer state-snapshot
 capture in `payload`, and the local buffering/batching layer (separate
 from `CaptureDispatcher`'s in-memory queue, per the batching backlog task).
+Phase 7 addition: the AutoGen adapter (`AutoGenCaptureHandler`) -- real
+capture and halt against `autogen-agentchat`, proven end-to-end.
