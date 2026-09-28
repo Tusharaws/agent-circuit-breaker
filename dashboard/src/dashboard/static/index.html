@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Agent Execution Guardian — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8eb;
+    --muted: #9aa2af;
+    --accent: #4f8cff;
+    --danger: #ff6b6b;
+    --ok: #3ecf8e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header .subtitle { color: var(--muted); font-size: 13px; }
+  main { padding: 24px; display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 1100px; margin: 0 auto; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .field input {
+    background: #0d0f13; border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  button {
+    background: var(--accent); color: white; border: none; border-radius: 6px;
+    padding: 7px 14px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  tr.row { cursor: pointer; }
+  tr.row:hover { background: #1d212b; }
+  tr.row.selected { background: #202942; }
+  .confidence { font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); padding: 16px 0; font-size: 13px; }
+  .event-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
+  .event {
+    background: #0d0f13; border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; font-size: 12px;
+  }
+  .event .event-head { display: flex; justify-content: space-between; color: var(--muted); margin-bottom: 4px; }
+  .event.highlighted { border-color: var(--danger); background: #1a1213; }
+  .event pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 11.5px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; }
+  .badge.reason { background: #2a2140; color: #c9b8ff; }
+  h2 { font-size: 14px; margin: 0 0 12px 0; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+
+const { useState, useEffect, useCallback } = React;
+
+async function getJSON(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`${url} -> ${response.status}`);
+  }
+  return response.json();
+}
+
+function formatTimestamp(iso) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch (err) {
+    return iso;
+  }
+}
+
+function HaltFilters({ traceId, since, until, onChange, onSearch }) {
+  return (
+    <div className="filters">
+      <div className="field">
+        <label>trace_id</label>
+        <input
+          value={traceId}
+          onChange={(e) => onChange({ traceId: e.target.value })}
+          placeholder="thread-abc"
+        />
+      </div>
+      <div className="field">
+        <label>since</label>
+        <input
+          type="datetime-local"
+          value={since}
+          onChange={(e) => onChange({ since: e.target.value })}
+        />
+      </div>
+      <div className="field">
+        <label>until</label>
+        <input
+          type="datetime-local"
+          value={until}
+          onChange={(e) => onChange({ until: e.target.value })}
+        />
+      </div>
+      <button onClick={onSearch}>Search</button>
+    </div>
+  );
+}
+
+function HaltTable({ halts, selectedHaltId, onSelect }) {
+  if (halts.length === 0) {
+    return <div className="empty">No halts match these filters.</div>;
+  }
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>trace_id</th>
+          <th>reason</th>
+          <th>confidence</th>
+          <th>timestamp</th>
+        </tr>
+      </thead>
+      <tbody>
+        {halts.map((h) => (
+          <tr
+            key={h.halt_id}
+            className={"row" + (h.halt_id === selectedHaltId ? " selected" : "")}
+            onClick={() => onSelect(h)}
+          >
+            <td>{h.trace_id}</td>
+            <td><span className="badge reason">{h.reason}</span></td>
+            <td className="confidence">{h.confidence.toFixed(2)}</td>
+            <td>{formatTimestamp(h.timestamp)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function EventList({ events, highlightIds }) {
+  if (events.length === 0) {
+    return <div className="empty">No events.</div>;
+  }
+  const highlighted = new Set(highlightIds || []);
+  return (
+    <div className="event-list">
+      {events.map((e) => (
+        <div
+          key={e.event_id}
+          className={"event" + (highlighted.has(e.event_id) ? " highlighted" : "")}
+        >
+          <div className="event-head">
+            <span>{e.event_id}</span>
+            <span>{formatTimestamp(e.enqueued_at)}</span>
+          </div>
+          <pre>{JSON.stringify(e.payload, null, 2)}</pre>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HaltDetail({ halt }) {
+  const [context, setContext] = useState(null);
+  const [trace, setTrace] = useState(null);
+  const [showFullTrace, setShowFullTrace] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setContext(null);
+    setTrace(null);
+    setShowFullTrace(false);
+    setError(null);
+    getJSON(`/api/halts/${encodeURIComponent(halt.halt_id)}/context`)
+      .then(setContext)
+      .catch((err) => setError(String(err)));
+  }, [halt.halt_id]);
+
+  const loadFullTrace = useCallback(() => {
+    getJSON(`/api/traces/${encodeURIComponent(halt.trace_id)}`)
+      .then((events) => {
+        setTrace(events);
+        setShowFullTrace(true);
+      })
+      .catch((err) => setError(String(err)));
+  }, [halt.trace_id]);
+
+  return (
+    <div className="panel">
+      <h2>Triggering context — {halt.trace_id}</h2>
+      {error && <div className="empty">{error}</div>}
+      {!error && context === null && <div className="empty">Loading…</div>}
+      {!error && context !== null && !showFullTrace && (
+        <React.Fragment>
+          <EventList events={context} />
+          <div style={{ marginTop: 12 }}>
+            <button className="secondary" onClick={loadFullTrace}>
+              View full trace timeline
+            </button>
+          </div>
+        </React.Fragment>
+      )}
+      {!error && showFullTrace && (
+        <React.Fragment>
+          <EventList events={trace} highlightIds={halt.triggering_window} />
+          <div style={{ marginTop: 12 }}>
+            <button className="secondary" onClick={() => setShowFullTrace(false)}>
+              Back to triggering context only
+            </button>
+          </div>
+        </React.Fragment>
+      )}
+    </div>
+  );
+}
+
+function Dashboard() {
+  const [filters, setFilters] = useState({ traceId: "", since: "", until: "" });
+  const [halts, setHalts] = useState([]);
+  const [selectedHalt, setSelectedHalt] = useState(null);
+  const [error, setError] = useState(null);
+
+  const search = useCallback(() => {
+    const params = new URLSearchParams();
+    if (filters.traceId) params.set("trace_id", filters.traceId);
+    if (filters.since) params.set("since", new Date(filters.since).toISOString());
+    if (filters.until) params.set("until", new Date(filters.until).toISOString());
+    getJSON(`/api/halts?${params.toString()}`)
+      .then((results) => {
+        setHalts(results);
+        setSelectedHalt(null);
+        setError(null);
+      })
+      .catch((err) => setError(String(err)));
+  }, [filters]);
+
+  useEffect(() => {
+    search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <React.Fragment>
+      <header>
+        <h1>Agent Execution Guardian</h1>
+        <span className="subtitle">trace &amp; halt history</span>
+      </header>
+      <main>
+        <div className="panel">
+          <h2>Halt history</h2>
+          <HaltFilters
+            traceId={filters.traceId}
+            since={filters.since}
+            until={filters.until}
+            onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
+            onSearch={search}
+          />
+          <div style={{ marginTop: 16 }}>
+            {error && <div className="empty">{error}</div>}
+            {!error && <HaltTable halts={halts} selectedHaltId={selectedHalt && selectedHalt.halt_id} onSelect={setSelectedHalt} />}
+          </div>
+        </div>
+        {selectedHalt && <HaltDetail halt={selectedHalt} />}
+      </main>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Dashboard />);
+
+</script>
+</body>
+</html>

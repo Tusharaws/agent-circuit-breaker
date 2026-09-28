@@ -9,11 +9,15 @@ from schemas.halt_signal import load_allowed_reasons
 
 
 def test_default_config_lists_expected_reasons():
-    """Sanity check that the shipped config still defines the original 3 reasons."""
+    """Sanity check that the shipped config defines the expected reasons.
+    manual_override added in Phase 5 (control-api's manual override
+    trigger task) -- a human's manual halt shouldn't have to masquerade
+    as one of the automated-detection reasons in the audit log."""
     assert load_allowed_reasons() == [
         "repeated_tool_calls",
         "repeated_generation",
         "runaway_loop",
+        "manual_override",
     ]
 
 

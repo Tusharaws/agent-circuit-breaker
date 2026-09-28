@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "integration-tests"
+version = "0.0.1"
+description = "Cross-package integration tests (Phase 6) -- wires interceptor, sanitizer, queue-client, evaluator, and control-api together for real. None of the 5 components should depend on all 4 others in production; this is a test-only concern with its own package."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7",
+    "fakeredis>=2,<3",
+    "interceptor",
+    "sanitizer",
+    "queue-client",
+    "evaluator",
+    "control-api",
+    "langchain>=1,<2",
+    "dashboard",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/integration_tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: exercises the real SLM model (slower, needs it cached/downloadable)",
+]

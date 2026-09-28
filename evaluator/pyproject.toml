@@ -8,7 +8,24 @@ version = "0.0.1"
 description = "Judges windows of node-level trace events for semantic loop/repetition patterns."
 requires-python = ">=3.11"
 readme = "README.md"
-dependencies = []
+dependencies = [
+    "queue-client",
+    "schemas",
+    "mlx-lm",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7",
+    "fakeredis>=2,<3",
+    "control-api",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/evaluator"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: exercises the real SLM model (slower, needs it cached/downloadable)",
+]

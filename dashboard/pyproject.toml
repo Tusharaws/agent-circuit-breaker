@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dashboard"
+version = "0.0.1"
+description = "Trace visualization and halt history dashboard for the Agent Execution Guardian."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "fastapi>=0.100,<1",
+    "uvicorn>=0.30,<1",
+    "control-api",
+    "queue-client",
+    "schemas",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7",
+    "fakeredis>=2,<3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dashboard"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

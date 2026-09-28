@@ -8,7 +8,24 @@ version = "0.0.1"
 description = "Circuit breaker API: halts a running LangGraph thread via interrupt() and runs the halted-thread cleanup/reaper job."
 requires-python = ">=3.11"
 readme = "README.md"
-dependencies = []
+dependencies = [
+    "langgraph>=1,<2",
+    "langgraph-checkpoint-sqlite>=3,<4",
+    "langgraph-checkpoint-postgres>=3,<4",
+    "redis>=5,<6",
+    "fastapi>=0.100,<1",
+    "schemas",
+    "httpx>=0.24,<1",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7",
+    "fakeredis>=2,<3",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/control_api"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

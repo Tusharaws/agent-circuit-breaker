@@ -7,3 +7,4 @@ as `- reason_name`. Blank lines and any other text are ignored.
 - repeated_tool_calls
 - repeated_generation
 - runaway_loop
+- manual_override
