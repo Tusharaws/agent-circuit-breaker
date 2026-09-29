@@ -118,6 +118,25 @@ drillable-down-to (trace_id filter -> the exact real triggering event)
 through the dashboard's own API -- not just through the dashboard's own
 tests seeding its own data.
 
+## `test_multi_tenant.py`
+
+Two simulated customers (`TenantConfig`, Phase 7), sharing the SAME
+underlying Redis instance -- the harder, more honest thing to prove:
+isolation comes from the prefixing scheme itself
+(`QueueClient.stream_prefix` / `SanitizingSink.policy` /
+`HaltRegistry.key_prefix`), not from separate physical infrastructure.
+Both tenants deliberately use the identical `thread_id` -- proving
+isolation holds under a customer-supplied identifier collision is a much
+stronger test than using different thread_ids per tenant, which wouldn't
+collide even without any isolation mechanism at all. Confirms: events
+never cross streams, each tenant's own redaction policy applies only to
+its own data (one masks emails, the other drops them entirely -- verified
+each tenant's stored output reflects only its own policy), and halting
+one tenant's thread never affects the other's `HaltRegistry` state.
+**Not covered** (a separate, undecided gap, not silently assumed solved):
+control-api's `/halt` endpoint auth and the dashboard are both still
+single-tenant.
+
 ## Install
 
 ```bash
@@ -141,5 +160,6 @@ gracefully and recovers; an absent evaluator doesn't affect the agent and
 the queue self-bounds), all 4 controlled scenarios (normal, PII leak,
 runaway loop, high load) passing with real measured numbers, and the
 single-long-running-node halt-SLA edge case measured and documented. Phase
-7's dashboard/halt-history addition proven wired end-to-end via a real
-POST /halt.
+7 additions: dashboard/halt-history proven wired end-to-end via a real
+POST /halt, and multi-tenant isolation (queues + sanitization policies)
+proven under a shared-Redis, identical-thread_id scenario.
