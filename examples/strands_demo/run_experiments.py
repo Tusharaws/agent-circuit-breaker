@@ -2,7 +2,7 @@
 
 Run from this folder:  python run_experiments.py
 Uses fakeredis-backed HaltRegistry and a scripted model, so results are
-about Strands' cancellation semantics, not model behaviour.
+about Strands' cancellation semantics, not model behaviour.yes
 """
 import shutil
 import tempfile
