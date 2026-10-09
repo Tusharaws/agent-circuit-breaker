@@ -256,3 +256,31 @@ LangGraph agents, including a full seeded-loop-to-halt cycle — run
 That's the same proof this whole system's own test suite relies on; it's a
 good sanity check that your local install is wired correctly before pointing
 it at a real agent.
+
+## Benchmarks
+
+Detection accuracy isn't just measured against this project's own hand-built
+24-trace eval set (`evaluator/EVAL_REPORT.md`) — it's also been validated
+against real recorded agent conversations from two independent, external
+datasets ([tau-bench](https://github.com/sierra-research/tau-bench) and
+[tau2-bench](https://github.com/sierra-research/tau2-bench), both Sierra,
+MIT licensed), covering retail, airline, and telecom domains and six
+different models (GPT-4o, Claude 3.5/3.7 Sonnet, GPT-4.1, GPT-4.1-mini,
+o4-mini):
+
+| Source | Domain(s) | Labeled examples | Precision | Recall |
+|---|---|---|---|---|
+| Synthetic eval set | n/a (hand-built) | 24 | 90% | 75% |
+| tau-bench | retail | 716 | 100% | 93.7% |
+| tau2-bench | airline, telecom | 1622 | 100% | 94.7% |
+
+Zero false positives across both external datasets (2,338 real conversations
+total), and recall in the low-to-mid 90s on real model failures, consistently
+higher than the synthetic set's 75% — real repeated-tool-call loops turned
+out to be easier to catch than this project's own deliberately hard
+hand-built edge cases, not harder.
+
+Full methodology (how the loop/no-loop label is derived from each dataset's
+own success signal, the conversion pipeline, and an honest breakdown of what
+the remaining misses actually look like) is in `docs/BENCHMARKING.md`. The
+7-dimension tracking workbook is `benchmarks/circuit_breaker_benchmarks.xlsx`.
