@@ -280,6 +280,40 @@ higher than the synthetic set's 75% — real repeated-tool-call loops turned
 out to be easier to catch than this project's own deliberately hard
 hand-built edge cases, not harder.
 
+**False positive rate** — the same datasets' successful (non-looping)
+conversations double as a real-world false-positive test, since every one
+of them is a case the detector must correctly leave alone:
+
+| Source | Successful conversations | False halts |
+|---|---|---|
+| tau-bench (retail) | 477 | 0 |
+| tau2-bench (airline, telecom) | 375 | 0 |
+| **Combined** | **852** | **0 (0%)** |
+
+**Detect-to-halt latency** also held up on real data: replaying the 5
+longest real loop trajectories (live, through the real SLM and real
+control-api, not a static classification) measured 558–871ms detect
+latency and 2–11ms halt-trigger latency — matching this project's existing
+synthetic-scenario baseline of ~630-650ms even on longer, more complex real
+conversations.
+
+**Steady-state overhead** — real tool-call payloads (nested JSON, real
+names/addresses/zip codes for the sanitizer to redact) are messier than
+the small synthetic payloads this was first measured with, so the same
+real conversations were replayed through the real capture → sanitize →
+queue pipeline, 2,000 events each, real vs. synthetic:
+
+| | Agent-thread cost (`capture()`) | Background-pipeline cost (sanitize + queue write) |
+|---|---|---|
+| Real payloads | ~0ms either way | p99 0.31ms, max 1.94ms |
+| Synthetic payloads | ~0ms either way | p99 0.11ms, max 0.32ms |
+
+The agent's own thread pays nothing extra for realistic payload size
+(confirming the existing "zero measurable added latency" claim). The
+background pipeline does cost more on real data — about 1.6x more total
+— but stays well inside the 5ms/iteration budget even at its worst
+observed case.
+
 Full methodology (how the loop/no-loop label is derived from each dataset's
 own success signal, the conversion pipeline, and an honest breakdown of what
 the remaining misses actually look like) is in `docs/BENCHMARKING.md`. The
